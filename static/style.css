@@ -105,6 +105,20 @@ tbody tr.status-failed, tbody tr.status-skipped { background: #fff8f2; }
 
 .stack { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
 .stack label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+
+.restore-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 16px; }
+.restore-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.restore-form select {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  color: var(--ink);
+  background: #fff;
+  min-width: 260px;
+}
+.small-title { font-size: 14px; margin: 16px 0 8px; }
+.restores td { font-size: 12.5px; }
 input {
   padding: 6px 8px;
   border: 1px solid var(--line);

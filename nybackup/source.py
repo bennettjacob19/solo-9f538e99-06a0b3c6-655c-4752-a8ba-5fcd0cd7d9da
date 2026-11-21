@@ -51,6 +51,24 @@ AFTER INSERT ON jobs
 BEGIN
     UPDATE meta SET value = CAST(value AS INTEGER) + 1 WHERE key = 'write_seq';
 END;
+
+-- Restore provenance.  One row per job that was restored (补回) from a daily
+-- backup.  ``source_key`` identifies the lost job inside its backup and is the
+-- idempotency key: re-submitting the same source (concurrent request, retry
+-- after restart, or the same job chosen again from a later backup) returns the
+-- same new job id and never creates a second copy.  Because this table lives in
+-- the source database it is included in every subsequent daily snapshot, which
+-- is what makes "later backups restore to the same id" work.
+CREATE TABLE IF NOT EXISTS job_restore_sources (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_key          TEXT NOT NULL UNIQUE,
+    backup_plan_date    TEXT NOT NULL,
+    origin_job_id       INTEGER NOT NULL,
+    origin_source_key   TEXT,
+    origin_note         TEXT NOT NULL DEFAULT '',
+    new_job_id          INTEGER NOT NULL REFERENCES jobs(id),
+    restored_utc        TEXT NOT NULL
+);
 """
 
 SITES = ["曼哈顿中城", "布鲁克林", "皇后区", "布朗克斯", "斯塔滕岛"]

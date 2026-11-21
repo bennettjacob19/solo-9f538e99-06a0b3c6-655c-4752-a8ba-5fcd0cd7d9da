@@ -109,6 +109,54 @@
   </table>
 </section>
 
+<section class="card">
+  <h2>从备份补回作业</h2>
+  <p class="hint">
+    选择一份已完成的备份并输入备份内的原作业编号：遗失的作业及其全部事件会补回当前源库，
+    源库为其分配新编号，事件归到新编号下。同一来源重复提交（含重启后重试、或从后续备份再次提交）
+    只会补回一份，每次都返回同一个新编号。补回来源会写入源库，之后的每日备份自动带上该记录。
+  </p>
+  {% if files %}
+  <form method="post" action="{{ url_for('restore_from_backup') }}" class="restore-form">
+    <label>备份（计划日期）
+      <select name="plan_date" required>
+        {% for iso in files|sort(reverse=True) %}
+          <option value="{{ iso }}">{{ iso }}（jobs-{{ iso }}.sqlite）</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>原作业编号
+      <input name="origin_job_id" type="number" min="1" step="1" required placeholder="例如：7">
+    </label>
+    <button class="button" type="submit">补回作业</button>
+  </form>
+  {% else %}
+  <p class="muted">尚无已完成的备份可用于补回，请先执行一次备份。</p>
+  {% endif %}
+
+  <h3 class="small-title">补回记录（源库来源表）</h3>
+  <table class="restores">
+    <thead>
+      <tr><th>补回时间（UTC）</th><th>新编号</th><th>备份计划日期</th><th>原作业编号</th><th>来源标识</th><th>新作业标题</th><th>备注</th></tr>
+    </thead>
+    <tbody>
+    {% for r in restores %}
+      <tr>
+        <td class="mono small">{{ r.restored_utc }}</td>
+        <td><strong>#{{ r.new_job_id }}</strong></td>
+        <td>{{ r.backup_plan_date }}</td>
+        <td>#{{ r.origin_job_id }}</td>
+        <td class="mono small">{{ r.source_key }}</td>
+        <td class="small">{{ r.new_job_title or '—' }}</td>
+        <td class="muted small">{{ r.origin_note or '—' }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="muted">暂无补回记录</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
 <div class="grid">
   <section class="card">
     <h2>追加样例记录</h2>

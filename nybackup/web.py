@@ -22,7 +22,7 @@ from flask import (
     url_for,
 )
 
-from . import backup, source
+from . import backup, restore, source
 from .schedule import ScheduleError, format_local, parse_hhmm, slot_for
 from .service import Service
 from .store import Store, iso_utc, parse_utc
@@ -186,6 +186,7 @@ def create_app(overrides: Optional[dict] = None) -> Flask:
             jobs=source.recent_jobs(app.config["SOURCE_PATH"], 12),
             stats=source.stats(app.config["SOURCE_PATH"]),
             files=files,
+            restores=restore.list_restores(app.config["SOURCE_PATH"], 25),
             events=store.recent_events(25),
             upcoming=snapshot["next_due"],
         )
@@ -297,6 +298,61 @@ def create_app(overrides: Optional[dict] = None) -> Flask:
             flash(f"{iso_date} 备份失败：{result.get('message', action)}", "error")
         return redirect(url_for("index"))
 
+    @app.post("/restore")
+    def restore_from_backup():
+        """Pick a completed backup + original job id and restore it (idempotent)."""
+        plan_date = (request.form.get("plan_date") or "").strip()
+        raw_job_id = (request.form.get("origin_job_id") or "").strip()
+        try:
+            date.fromisoformat(plan_date)
+        except ValueError:
+            flash("备份计划日期格式不正确，应为 YYYY-MM-DD", "error")
+            return redirect(url_for("index"))
+        try:
+            origin_job_id = int(raw_job_id)
+        except ValueError:
+            flash("作业编号必须是整数", "error")
+            return redirect(url_for("index"))
+
+        try:
+            result = restore.restore_job(
+                app.config["SOURCE_PATH"],
+                app.config["BACKUP_DIR"],
+                plan_date,
+                origin_job_id,
+            )
+        except restore.RestoreError as exc:
+            store.log(
+                "error",
+                f"补回失败（备份 {plan_date}，作业 #{origin_job_id}）: {exc}",
+                virtual_now=service.now(),
+                real_now=service.real_now(),
+            )
+            flash(f"补回失败：{exc}", "error")
+            return redirect(url_for("index"))
+
+        if result.reused:
+            message = (
+                f"该来源（{result.source_key}）已补回过，沿用同一新编号 "
+                f"#{result.new_job_id}，未重复补回"
+            )
+            flash_level = "info"
+        else:
+            message = (
+                f"已从备份 {plan_date} 补回原作业 #{origin_job_id}，"
+                f"新编号 #{result.new_job_id}，来源 {result.source_key}"
+                f"（含 {result.events} 条事件）"
+            )
+            flash_level = "success"
+        store.log(
+            "info",
+            message,
+            virtual_now=service.now(),
+            real_now=service.real_now(),
+        )
+        flash(message, flash_level)
+        return redirect(url_for("index"))
+
     @app.get("/download/<iso_date>")
     def download(iso_date: str):
         try:
@@ -336,6 +392,7 @@ def create_app(overrides: Optional[dict] = None) -> Flask:
             "next_due_utc": iso_utc(snapshot["next_due"].instant) if snapshot["next_due"] else None,
             "plans": [dict(row) for row in store.all_plans()],
             "files": sorted(backup.list_backup_files(app.config["BACKUP_DIR"]).keys()),
+            "restores": [dict(row) for row in restore.list_restores(app.config["SOURCE_PATH"], 100)],
         }
 
     @app.get("/healthz")
